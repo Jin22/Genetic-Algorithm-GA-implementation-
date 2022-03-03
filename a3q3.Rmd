@@ -1,0 +1,207 @@
+---
+title: "a3q3"
+author: "Jihoon Han"
+date: "4/8/2021"
+output: pdf_document
+---
+
+```{r, echo = TRUE}
+# part a)
+x <- c(-4.20, -2.85, -2.30, -1.02, 0.70, 0.98, 2.72, 3.50)
+beta <- 0.1
+
+log_likelihood <- function(alpha){
+  n <- length(alpha)
+  return_val <- c()
+  for (i in 1:n) {
+    return_val[i] <- n*log(beta)-n*log(pi)-sum(log((beta^2)+((x-alpha[i])^2)))
+  }
+  return(return_val)
+}
+
+alpha <-seq(-8,8,0.01)
+l_likelihood <- log_likelihood(alpha)
+plot(alpha,l_likelihood,ylab="log likelihood value",type="l",lwd=2,main="Log likelihood of Cauchy")
+
+# Looking closer to the global max point.
+alpha <-seq(-1,2,0.01)
+l_likelihood <- log_likelihood(alpha)
+plot(alpha,l_likelihood,ylab="log likelihood value",type="l",lwd=2,
+     main="Log likelihood of Cauchy, closer look")
+```
+If we look at the log-likelihood closer, we can see that the alpha value \
+that achieves the global maximum value of the log-likelihood is about 0.75.
+
+```{r, echo = TRUE, cache=TRUE}
+# part b)
+# sim_alg is the simulated annealing algorithm function
+sim_alg <- function(init, T, n) {
+  # init means intial value.
+  # T mean Temperature
+  # a is alpha
+  # new_a is the newly generated alpha
+  a <- init
+  f <- length(T)
+  for (i in 1:n) {
+    T_i <- T[1]*((T[f]/T[1])^((i-1)/n))
+    new_a <- rnorm(1, a[i], 1)
+    r <- exp((log_likelihood(new_a) - log_likelihood(a[i]))/T_i)
+    if (r >= 1) {
+      a[i+1] <- new_a
+    }
+    else {
+      u <- runif(1)
+      if (u <= r) {
+        a[i+1] <- new_a
+      }
+      else {
+        a[i+1] <- a[i]
+      }
+    }
+  }
+  return(a)
+}
+
+T <- c(10, 1, 0.1, 0.01, 0.001, 0.0001, 0.00001, 0.000001, 0.0000001)
+n <- 10^4
+init <- 0
+
+# MLE for initial value alpha = -2.5
+init <- -2.5
+alpha_vals <- sim_alg(init,T,n)
+plot(1:length(alpha_vals), alpha_vals, 
+     main="alpha simulated, initial value = -2.5", 
+     xlab = "number of simulations", ylab = "alpha value",cex =0.3)
+MLE_0 <- alpha_vals[n]
+MLE_0
+tail(alpha_vals)
+
+# MLE for initial value alpha = 0
+init <- 0
+alpha_vals <- sim_alg(init,T,n)
+plot(1:length(alpha_vals), alpha_vals, 
+     main="alpha simulated, initial value = 0", 
+     xlab = "number of simulations", ylab = "alpha value",cex =0.3)
+MLE_0 <- alpha_vals[n]
+MLE_0
+tail(alpha_vals)
+
+ # MLE for initial value alpha = -0.30875 
+init <- -0.30875 
+alpha_vals <- sim_alg(init,T,n)
+plot(1:length(alpha_vals), alpha_vals, 
+     main="alpha simulated, initial value = -0.30875", 
+     xlab = "number of simulations", ylab = "alpha value",cex =0.3)
+MLE_30875 <- alpha_vals[n]
+MLE_30875
+tail(alpha_vals)
+```
+As we can see, for all initial values, it seems like it converges to the \
+correct alpha that achieves global maximum, which is 0.73.
+
+```{r, echo = TRUE, cache=TRUE}
+# part c)
+#library(GA)
+#GA <- ga(type = "real-valued", fitness = log_likelihood,  lower = -7, upper = 7)
+#summary(GA)
+#plot(GA)
+
+# Now let's implement the Genetic Algorithm (GA)
+
+# decode function converts the x decimal values to binary values
+decode <- function(x, N){
+  bvals <- c()
+  for (i in 1:N) {
+    bvals[[i]] <- decimal2binary(x[i]*(10^6), 25)
+  }
+  return(bvals)
+}
+
+
+# encode function converts the x binary representation 
+# values to decimal values
+encode <- function(binary_rep, N) {
+  dvals <- c()
+  for (i in 1:N) {
+    dvals[i] <- binary2decimal(binary_rep[[i]]/(10^6))
+  }
+  return(dvals)
+}
+
+# crossover mutates the binary_representation of x and 
+# crossover the binaries.
+crossover <- function(binary_rep, row1, row2, split_point) {
+  b1 <- binary_rep[[row1]]
+  b2 <- binary_rep[[row2]]
+  b1_former <- b1[1:split_point]
+  b2_former <- b2[1:split_point]
+  b1_latter <- b1[(split_point+1):25]
+  b2_latter <- b2[(split_point+1):25]
+  return(rbind(c(b1_former, b2_latter), 
+               c(b2_former, b1_latter)))
+}
+
+
+Gen_alg <- function(N, iterations, mutation_prob) {
+  popn <- runif(N, 1, 31)
+  for (t in 1:iterations) {
+    binary_rep <- decode(popn,N)
+    # selecting parents
+    best_fit_row <- which.max(lapply(popn, log_likelihood))
+    least_fit_row <- which.min(lapply(popn, log_likelihood))
+    binary_rep[[least_fit_row]] <- binary_rep[[best_fit_row]]
+    # crossover
+    for (i in seq(1, N, 2)) {
+      split_point <- sample(c(1:24), 1)
+      crossover_val <- crossover(binary_rep, i, i+1, split_point)
+      binary_rep[[i]] <- crossover_val[1,]
+      binary_rep[[i+1]] <- crossover_val[2,]
+      # print(binary_rep)
+    }
+    # mutation
+    for (i in 1:N) {
+      u <- runif(1)
+      if (u < mutation_prob) {
+        mutation_point <- sample(c(1:25), 1)
+        binary_rep[[i]][mutation_point] <- (1 - binary_rep[[i]][mutation_point])
+      }
+    }
+    # update the new t+1 generation by encoding
+    popn <- encode(binary_rep,N)
+  }
+  return(popn)
+}
+
+# We take 10000 generations
+
+# Mutation probability 0.1
+Gen_alg(10,10000,0.1)
+Gen_alg(20,10000,0.1)
+Gen_alg(30,10000,0.1)
+
+# Mutation probability 0.2
+Gen_alg(10,10000,0.2)
+Gen_alg(20,10000,0.2)
+Gen_alg(30,10000,0.2)
+
+# Mutation probability 0.3
+Gen_alg(10,10000,0.3)
+Gen_alg(20,10000,0.3)
+Gen_alg(30,10000,0.3)
+```
+
+When we have low mutation(mutation probability = 0.1), \
+we can observe that most of the population has the value 0.732772, \
+which is the global maximal alpha. \
+However, since the mutation probability is low, we introduce less randomness,\
+and this might cause some generation being stuck in a different "local" maximal value. \
+As we have higher mutation probability (mutation probability = 0.3), \
+we introduce much more randomness, and this causes the population values \
+having different numbers rather than the global optimal value, 0.73. \
+However, we can identify that there are some values still having near \
+0.73.
+
+As the number of population increases, we can identify that the population \
+has much more randomness. \
+However, when the mutation is low, it still has the majority of population values \
+being near 0.73. 
